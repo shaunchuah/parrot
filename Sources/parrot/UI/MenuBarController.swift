@@ -59,7 +59,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         submenu.removeAllItems()
 
         let selected = devices.selectedUID
-        submenu.addItem(inputChoice(title: "Automatic (follow system)", uid: nil, checked: selected == nil))
+        submenu.addItem(inputChoice(title: "Same as System", uid: nil, checked: selected == nil))
         submenu.addItem(.separator())
         for device in devices.available() {
             submenu.addItem(inputChoice(title: device.name, uid: device.uid, checked: device.uid == selected))
