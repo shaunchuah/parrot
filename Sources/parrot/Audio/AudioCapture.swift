@@ -74,12 +74,18 @@ final class AudioCapture {
                                        kAudioUnitScope_Output, 0,
                                        &disable, UInt32(MemoryLayout<UInt32>.size)))
 
-        // Left unset, AUHAL follows the system default input.
-        if var device {
-            try check(AudioUnitSetProperty(unit, kAudioOutputUnitProperty_CurrentDevice,
-                                           kAudioUnitScope_Global, 0,
-                                           &device, UInt32(MemoryLayout<AudioDeviceID>.size)))
+        // Writing this property is what wires the unit to a device's input
+        // stream. Left unwritten the unit still reports the right device and
+        // starts without error, but renders zero frames, so the system default
+        // is resolved and written like any other choice.
+        var resolved = device ?? Self.systemDefaultInput()
+        guard resolved != AudioDeviceID(kAudioObjectUnknown) else {
+            dispose()
+            throw CaptureError.unavailable
         }
+        try check(AudioUnitSetProperty(unit, kAudioOutputUnitProperty_CurrentDevice,
+                                       kAudioUnitScope_Global, 0,
+                                       &resolved, UInt32(MemoryLayout<AudioDeviceID>.size)))
 
         // Read what the device actually produces, then ask AUHAL only for a
         // float layout at that same rate — the one conversion it will do.
@@ -201,6 +207,21 @@ final class AudioCapture {
             onLevel(computeRMS(chunk))
         }
         return noErr
+    }
+
+    /// The device the system currently records from. AUHAL will not resolve
+    /// this on its own, so it is read explicitly whenever the user has not
+    /// pinned a device.
+    private static func systemDefaultInput() -> AudioDeviceID {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultInputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+        var device = AudioDeviceID(kAudioObjectUnknown)
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject),
+                                   &address, 0, nil, &size, &device)
+        return device
     }
 
     private func dispose() {
