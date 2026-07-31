@@ -34,10 +34,12 @@ final class InputDeviceStore {
         }
     }
 
-    /// Every device that can record, in the order CoreAudio reports them.
+    /// Every device a person could record from, in the order CoreAudio reports
+    /// them. Excludes the private aggregate CoreAudio creates per audio client —
+    /// our own plumbing, which is otherwise indistinguishable from a microphone.
     func available() -> [Device] {
         deviceIDs().compactMap { id in
-            guard inputChannels(id) > 0, let uid = uid(of: id) else { return nil }
+            guard inputChannels(id) > 0, !isPrivateAggregate(id), let uid = uid(of: id) else { return nil }
             return Device(id: id, uid: uid, name: name(of: id) ?? uid)
         }
     }
@@ -78,6 +80,37 @@ final class InputDeviceStore {
         guard AudioObjectGetPropertyData(id, &addr, 0, nil, &size, raw) == noErr else { return 0 }
         let list = raw.assumingMemoryBound(to: AudioBufferList.self)
         return UnsafeMutableAudioBufferListPointer(list).reduce(0) { $0 + Int($1.mNumberChannels) }
+    }
+
+    /// Aggregate devices CoreAudio builds for its own clients are flagged private
+    /// in their composition. They report input channels and are not hidden, so
+    /// this is the only thing separating them from a real microphone. Aggregates
+    /// the user built in Audio MIDI Setup are not private and stay listed.
+    private func isPrivateAggregate(_ id: AudioDeviceID) -> Bool {
+        var transportAddr = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyTransportType,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var transport: UInt32 = 0
+        var transportSize = UInt32(MemoryLayout<UInt32>.size)
+        guard AudioObjectGetPropertyData(id, &transportAddr, 0, nil, &transportSize, &transport) == noErr,
+              transport == kAudioDeviceTransportTypeAggregate
+        else { return false }
+
+        var addr = AudioObjectPropertyAddress(
+            mSelector: kAudioAggregateDevicePropertyComposition,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var value: Unmanaged<CFDictionary>?
+        var size = UInt32(MemoryLayout<Unmanaged<CFDictionary>?>.size)
+        let status = withUnsafeMutablePointer(to: &value) {
+            AudioObjectGetPropertyData(id, &addr, 0, nil, &size, $0)
+        }
+        guard status == noErr, let value else { return false }
+        let composition = value.takeRetainedValue() as? [String: Any]
+        return composition?[kAudioAggregateDeviceIsPrivateKey] as? Int == 1
     }
 
     private func uid(of id: AudioDeviceID) -> String? {
