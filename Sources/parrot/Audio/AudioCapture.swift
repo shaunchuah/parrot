@@ -33,6 +33,10 @@ final class AudioCapture {
 
     private var unit: AudioUnit?
     private var buffer: AVAudioPCMBuffer?
+    /// AUHAL input does not resample: asking a 48 kHz device for 16 kHz renders
+    /// nothing at all. It is bound at the device's own rate and converted here.
+    private var converter: AVAudioConverter?
+    private var targetFormat: AVAudioFormat?
     private var samples: [Float] = []
     private var isRecording = false
     private let lock = NSLock()
@@ -77,12 +81,31 @@ final class AudioCapture {
                                            &device, UInt32(MemoryLayout<AudioDeviceID>.size)))
         }
 
-        guard let format = AVAudioFormat(commonFormat: .pcmFormatFloat32,
-                                         sampleRate: Self.targetSampleRate,
-                                         channels: 1, interleaved: false) else {
+        // Read what the device actually produces, then ask AUHAL only for a
+        // float layout at that same rate — the one conversion it will do.
+        var native = AudioStreamBasicDescription()
+        var nativeSize = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
+        try check(AudioUnitGetProperty(unit, kAudioUnitProperty_StreamFormat,
+                                       kAudioUnitScope_Input, 1, &native, &nativeSize))
+
+        guard let sourceFormat = AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: native.mSampleRate,
+            channels: max(1, AVAudioChannelCount(native.mChannelsPerFrame)),
+            interleaved: false
+        ), let targetFormat = AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: Self.targetSampleRate,
+            channels: 1,
+            interleaved: false
+        ), let converter = AVAudioConverter(from: sourceFormat, to: targetFormat) else {
+            dispose()
             throw CaptureError.unavailable
         }
-        var asbd = format.streamDescription.pointee
+        self.targetFormat = targetFormat
+        self.converter = converter
+
+        var asbd = sourceFormat.streamDescription.pointee
         try check(AudioUnitSetProperty(unit, kAudioUnitProperty_StreamFormat,
                                        kAudioUnitScope_Output, 1,
                                        &asbd, UInt32(MemoryLayout<AudioStreamBasicDescription>.size)))
@@ -91,7 +114,7 @@ final class AudioCapture {
         try check(AudioUnitSetProperty(unit, kAudioUnitProperty_MaximumFramesPerSlice,
                                        kAudioUnitScope_Global, 0,
                                        &slice, UInt32(MemoryLayout<UInt32>.size)))
-        buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: Self.framesPerSlice)
+        buffer = AVAudioPCMBuffer(pcmFormat: sourceFormat, frameCapacity: Self.framesPerSlice)
 
         var callback = AURenderCallbackStruct(
             inputProc: captureRenderCallback,
@@ -140,12 +163,36 @@ final class AudioCapture {
         bus: UInt32,
         frames: UInt32
     ) -> OSStatus {
-        guard let unit, let buffer, frames <= buffer.frameCapacity else { return noErr }
+        guard let unit, let buffer, let converter, let targetFormat,
+              frames <= buffer.frameCapacity else { return noErr }
         buffer.frameLength = frames
         let status = AudioUnitRender(unit, flags, timestamp, bus, frames, buffer.mutableAudioBufferList)
-        guard status == noErr, let channel = buffer.floatChannelData?[0] else { return status }
+        guard status == noErr else {
+            // Never fail silently: a render that returns nothing used to look
+            // exactly like a microphone that heard nothing.
+            FileHandle.standardError.write(Data("audio render failed: \(status)\n".utf8))
+            return status
+        }
 
-        let chunk = Array(UnsafeBufferPointer(start: channel, count: Int(frames)))
+        let ratio = targetFormat.sampleRate / buffer.format.sampleRate
+        let capacity = AVAudioFrameCount(Double(frames) * ratio) + 64
+        guard let out = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: capacity) else {
+            return noErr
+        }
+        var consumed = false
+        var error: NSError?
+        converter.convert(to: out, error: &error) { _, outStatus in
+            if consumed {
+                outStatus.pointee = .noDataNow
+                return nil
+            }
+            consumed = true
+            outStatus.pointee = .haveData
+            return buffer
+        }
+        guard error == nil, let channel = out.floatChannelData?[0] else { return noErr }
+
+        let chunk = Array(UnsafeBufferPointer(start: channel, count: Int(out.frameLength)))
         lock.lock()
         samples.append(contentsOf: chunk)
         lock.unlock()
@@ -160,6 +207,8 @@ final class AudioCapture {
         if let unit { AudioComponentInstanceDispose(unit) }
         unit = nil
         buffer = nil
+        converter = nil
+        targetFormat = nil
     }
 
     private func check(_ status: OSStatus) throws {
