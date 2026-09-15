@@ -225,7 +225,7 @@ final class InputDeviceStore {
     /// this is the only thing separating them from a real microphone. Aggregates
     /// the user built in Audio MIDI Setup are not private and stay listed.
     private func isPrivateAggregate(_ id: AudioDeviceID) -> Bool {
-        guard transport(of: id) == kAudioDeviceTransportTypeAggregate else { return false }
+        guard Self.transport(of: id) == kAudioDeviceTransportTypeAggregate else { return false }
 
         var addr = AudioObjectPropertyAddress(
             mSelector: kAudioAggregateDevicePropertyComposition,
