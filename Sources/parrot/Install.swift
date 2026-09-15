@@ -48,7 +48,10 @@ struct Install: ParsableCommand {
 
         let plist: [String: Any] = [
             "Label": Self.label,
-            "ProgramArguments": [binary, "run", "--skip-doctor"],
+            "ProgramArguments": [
+                binary, "run", "--skip-doctor",
+                "--model", ModelRegistry.recommendedID, // whisper-small.en
+            ],
             "RunAtLoad": true,
             "KeepAlive": ["SuccessfulExit": false] as [String: Any],
             "ProcessType": "Interactive",

@@ -6,13 +6,16 @@ import Foundation
 /// the binary stays self-contained — no `Bundle.module` lookup, no per-target
 /// resource bundle to ship alongside the executable.
 enum ModelRegistry {
+    /// Default model id written into the LaunchAgent and used when `run` has no `--model`.
+    static let recommendedID = "whisper-small.en"
+
     static let shared: [TranscriptionModel] = [
         TranscriptionModel(
-            id: "whisper-base.en",
-            displayName: "Whisper Base (English)",
+            id: recommendedID,
+            displayName: "Whisper Small (English)",
             engine: .whisperKit,
-            whisperKitID: "openai_whisper-base.en",
-            sizeMB: 145,
+            whisperKitID: "openai_whisper-small.en",
+            sizeMB: 488,
             languages: ["en"],
             recommended: true
         ),
@@ -23,15 +26,6 @@ enum ModelRegistry {
             whisperKitID: "openai_whisper-large-v3-v20240930_turbo",
             sizeMB: 1620,
             languages: ["multi"],
-            recommended: false
-        ),
-        TranscriptionModel(
-            id: "whisper-small.en",
-            displayName: "Whisper Small (English)",
-            engine: .whisperKit,
-            whisperKitID: "openai_whisper-small.en",
-            sizeMB: 488,
-            languages: ["en"],
             recommended: false
         ),
     ]
