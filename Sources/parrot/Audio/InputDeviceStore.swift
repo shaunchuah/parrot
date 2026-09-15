@@ -132,7 +132,7 @@ final class InputDeviceStore {
     /// auto-selected. Matches Apple's Continuity Capture transport types plus
     /// the names and UIDs those devices actually show up as.
     static func isContinuityMicrophone(_ device: Device) -> Bool {
-        isContinuityMicrophone(name: device.name, uid: device.uid, transport: transport(of: device.id))
+        isContinuityMicrophone(name: device.name, uid: device.uid, transport: Self.transport(of: device.id))
     }
 
     static func isContinuityMicrophone(name: String, uid: String, transport: UInt32) -> Bool {
@@ -225,7 +225,7 @@ final class InputDeviceStore {
     /// this is the only thing separating them from a real microphone. Aggregates
     /// the user built in Audio MIDI Setup are not private and stay listed.
     private func isPrivateAggregate(_ id: AudioDeviceID) -> Bool {
-        guard transport(of: id) == kAudioDeviceTransportTypeAggregate else { return false }
+        guard Self.transport(of: id) == kAudioDeviceTransportTypeAggregate else { return false }
 
         var addr = AudioObjectPropertyAddress(
             mSelector: kAudioAggregateDevicePropertyComposition,
