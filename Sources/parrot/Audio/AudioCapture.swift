@@ -14,10 +14,9 @@ import Foundation
 /// silence. Measured on a Bluetooth headset: 0 frames in 3 s for all three,
 /// against 48 000 frames for the same device through AUHAL.
 ///
-/// AUHAL also converts to the target format itself, so there is no
-/// `AVAudioConverter` in the path, and no `installTap(onBus:format:)` — which
-/// removes the format-mismatch exception that could terminate the daemon when
-/// the input device changed.
+/// AUHAL is bound at the device's native rate and resampled to 16 kHz here.
+/// There is no `installTap(onBus:format:)` — which removes the format-mismatch
+/// exception that could terminate the daemon when the input device changed.
 final class AudioCapture {
     enum CaptureError: Error {
         case unavailable

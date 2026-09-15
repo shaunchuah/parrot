@@ -90,14 +90,17 @@ struct Run: ParsableCommand {
             capture.onLevel = { level in overlay.pushLevel(level) }
         }
         let menuBar = MainActor.assumeIsolated { MenuBarController(modelID: chosenModel.id, devices: devices) }
+        let initialInput = devices.resolved()
 
         do {
             try monitor.start { event in
                 switch event {
                 case .pressed:
                     do {
-                        try capture.start(device: devices.resolved()?.id)
-                        FileHandle.standardError.write(Data("● recording\n".utf8))
+                        let input = devices.resolved()
+                        try capture.start(device: input?.id)
+                        let label = input.map { " · \($0.name)" } ?? ""
+                        FileHandle.standardError.write(Data("● recording\(label)\n".utf8))
                         MainActor.assumeIsolated {
                             overlay?.show(.recording)
                             menuBar.setRecording(true)
@@ -170,7 +173,9 @@ struct Run: ParsableCommand {
         sigint.resume()
         signal(SIGINT, SIG_IGN)
 
-        FileHandle.standardError.write(Data("listening on fn hold · model: \(chosenModel.id) · ^C to quit\n".utf8))
+        FileHandle.standardError.write(Data(
+            "listening on fn hold · model: \(chosenModel.id) · input: \(initialInput.map { $0.name } ?? "system default") · ^C to quit\n".utf8
+        ))
         app.run()
     }
 }

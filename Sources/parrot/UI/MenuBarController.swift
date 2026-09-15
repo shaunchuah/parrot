@@ -59,10 +59,33 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         submenu.removeAllItems()
 
         let selected = devices.selectedUID
-        submenu.addItem(inputChoice(title: "Same as System", uid: nil, checked: selected == nil))
+        let listed = devices.available()
+        submenu.addItem(inputChoice(
+            title: "Same as System",
+            uid: nil,
+            checked: devices.followsSystem || !devices.hasSavedChoice
+        ))
         submenu.addItem(.separator())
-        for device in devices.available() {
-            submenu.addItem(inputChoice(title: device.name, uid: device.uid, checked: device.uid == selected))
+
+        var foundPinned = false
+        for device in listed {
+            let checked = !devices.followsSystem && device.uid == selected
+            if checked { foundPinned = true }
+            submenu.addItem(inputChoice(title: device.name, uid: device.uid, checked: checked))
+        }
+
+        if listed.isEmpty {
+            let empty = NSMenuItem(title: "No microphones found", action: nil, keyEquivalent: "")
+            empty.isEnabled = false
+            submenu.addItem(empty)
+        }
+
+        if let selected, !devices.followsSystem, !foundPinned {
+            let name = devices.pinnedName ?? selected
+            let missing = inputChoice(title: "\(name) (unplugged)", uid: selected, checked: true)
+            missing.isEnabled = false
+            submenu.addItem(.separator())
+            submenu.addItem(missing)
         }
     }
 
