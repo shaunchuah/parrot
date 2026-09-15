@@ -186,8 +186,8 @@ Initial registry:
 
 | Engine | Model | Size | Notes |
 |---|---|---|---|
-| WhisperKit | `whisper-base.en` | ~80 MB | Fast, English only, low resource |
-| WhisperKit | `whisper-large-v3-turbo` | ~800 MB | Recommended for daily use |
+| WhisperKit | `whisper-small.en` | ~488 MB | Recommended default, English only |
+| WhisperKit | `whisper-large-v3-turbo` | ~1.6 GB | Optional larger multilingual model |
 | Parakeet | `parakeet-tdt-0.6b-v3` | ~600 MB | English, fastest on ANE |
 
 Models live in `~/Library/Application Support/parrot/models/`. Not bundled — fetched on first selection or via `parrot models download`.
@@ -269,5 +269,5 @@ Swift's module unit is the **SPM target** (one target = one module = one `import
 
 - **Parakeet via FluidAudio vs. direct CoreML?** FluidAudio is faster to integrate but adds a dependency. Decide once we benchmark both.
 - **Hotkey conflicts.** Right-Option is unused on most keyboards but some users remap it. Print a clear error if `CGEventTap` registration fails.
-- **First-run UX.** Bundle `whisper-base.en` so `parrot` works out of the box, or always require an explicit download? Probably the latter — keeps the binary small and the model directory clean.
+- **First-run UX.** Bundle `whisper-small.en` so `parrot` works out of the box, or always require an explicit download? Probably the latter — keeps the binary small and the model directory clean.
 - **Code signing.** A self-built unsigned binary works fine locally but accessibility permission persistence is more reliable for signed binaries. Decide if we sign for personal distribution.
