@@ -6,6 +6,13 @@ actor WhisperKitTranscriber: Transcriber {
     private let model: TranscriptionModel
     private var pipeline: WhisperKit?
 
+    /// Hub cache root; models land in ~/.parrot/models/argmaxinc/whisperkit-coreml.
+    /// WhisperKit's default is ~/Documents/huggingface, which breaks when
+    /// Documents is synced to iCloud with Optimize Mac Storage: evicted files
+    /// can't be materialized from a LaunchAgent (EDEADLK on every load).
+    static let downloadBase = FileManager.default.homeDirectoryForCurrentUser
+        .appending(component: ".parrot")
+
     init(model: TranscriptionModel) {
         self.modelID = model.id
         self.model = model
@@ -20,7 +27,13 @@ actor WhisperKitTranscriber: Transcriber {
             throw TranscriberError.missingEngineID
         }
         FileHandle.standardError.write(Data("loading \(model.id)...\n".utf8))
-        let config = WhisperKitConfig(model: whisperKitID, verbose: false, prewarm: true, load: true)
+        let config = WhisperKitConfig(
+            model: whisperKitID,
+            downloadBase: Self.downloadBase,
+            verbose: false,
+            prewarm: true,
+            load: true
+        )
         pipeline = try await WhisperKit(config)
         FileHandle.standardError.write(Data("✓ \(model.id) ready\n".utf8))
     }
